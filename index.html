@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1320">
+<title>Drawing Lots</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,300;1,500&family=Instrument+Sans:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #0e1320;
+    --ink: #1d2230;
+    --glow: #f2dfa8;
+    --text: #e9edf5;
+    --mute: #9ba6bb;
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --display: "Cormorant Garamond", "Newsreader", Georgia, serif;
+    --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-sizing: border-box;
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { background: var(--night); }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--glow); outline-offset: 4px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Diffuse light behind everything ---------- */
+  .light {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--night);
+    z-index: 0;
+  }
+  .orb {
+    position: absolute;
+    width: 120vmax;
+    height: 120vmax;
+    border-radius: 50%;
+    opacity: 0.6;
+    will-change: transform;
+    transition: opacity 2s ease;
+  }
+  .o1 {
+    left: -45vmax; top: -55vmax;
+    background: radial-gradient(circle, rgba(244, 207, 140, 0.85) 0%, rgba(244, 207, 140, 0) 60%);
+    animation: drift1 26s ease-in-out infinite alternate;
+  }
+  .o2 {
+    right: -70vmax; top: 5vmax;
+    background: radial-gradient(circle, rgba(104, 134, 226, 0.75) 0%, rgba(104, 134, 226, 0) 60%);
+    animation: drift2 33s ease-in-out infinite alternate;
+  }
+  .o3 {
+    left: -30vmax; bottom: -80vmax;
+    background: radial-gradient(circle, rgba(186, 146, 226, 0.65) 0%, rgba(186, 146, 226, 0) 60%);
+    animation: drift3 39s ease-in-out infinite alternate;
+  }
+  .light.calm .orb { opacity: 0.3; }
+  @keyframes drift1 { from { transform: translate3d(0, 0, 0) scale(1); } to { transform: translate3d(14vmax, 10vmax, 0) scale(1.15); } }
+  @keyframes drift2 { from { transform: translate3d(0, 0, 0) scale(1.05); } to { transform: translate3d(-16vmax, 12vmax, 0) scale(0.9); } }
+  @keyframes drift3 { from { transform: translate3d(0, 0, 0) scale(0.95); } to { transform: translate3d(12vmax, -14vmax, 0) scale(1.12); } }
+
+  /* ---------- Screens ---------- */
+  .screen {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: calc(2rem + env(safe-area-inset-top, 0px)) 1.5rem calc(2rem + env(safe-area-inset-bottom, 0px));
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .screen.in { opacity: 1; }
+  .screen.out { opacity: 0; }
+  .screen h1:focus, .screen h2:focus { outline: none; }
+
+  /* Opening */
+  #opening { align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+  .title-en {
+    font-family: var(--display);
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(4rem, 19vw, 8.5rem);
+    line-height: 0.92;
+    letter-spacing: -0.01em;
+    margin: 0;
+    color: #fff8e6;
+    text-shadow: 0 0 36px rgba(244, 207, 140, 0.5), 0 0 110px rgba(244, 190, 120, 0.4);
+    animation: emerge 2.8s ease-out both;
+  }
+  .title-en span { display: block; }
+  .title-en span + span { margin-left: 0.9em; }
+  @keyframes emerge {
+    from { opacity: 0; filter: blur(16px); letter-spacing: 0.09em; }
+    to { opacity: 1; filter: blur(0); letter-spacing: -0.01em; }
+  }
+  .continue {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    margin: 0 auto;
+    width: max-content;
+    background: none;
+    border: 0;
+    padding: 0.75rem 1.5rem;
+    font-family: var(--sans);
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    color: var(--text);
+    cursor: pointer;
+    opacity: 0;
+    animation: breathe-text 3.6s ease-in-out 3s infinite;
+  }
+  @keyframes breathe-text { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.95; } }
+
+  /* Voice guide: one glowing orb in the middle */
+  #guide { align-items: center; justify-content: center; text-align: center; }
+  .guide-inner { width: 100%; max-width: 30rem; display: flex; flex-direction: column; align-items: center; }
+  .guide-line {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.75rem;
+    line-height: 1.35;
+    margin: 0 0 0.75rem;
+    max-width: 20rem;
+  }
+  .note { color: var(--mute); margin: 0; max-width: 22rem; }
+  .note a { color: var(--glow); }
+  .voice {
+    width: 12.5rem;
+    height: 12.5rem;
+    margin: 2.75rem 0 1.25rem;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    background: radial-gradient(circle at 38% 32%, #fffaf0 0%, #f2dfa8 38%, #e0a35a 78%, #c9873f 100%);
+    box-shadow: 0 0 70px rgba(244, 207, 140, 0.45), 0 0 160px rgba(244, 190, 120, 0.3);
+    transition: opacity 0.6s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .voice.idle { animation: swell 4.5s ease-in-out infinite; }
+  .voice.connecting { opacity: 0.55; pointer-events: none; animation: swell 1.6s ease-in-out infinite; }
+  .voice.listening { opacity: 0.8; animation: swell 6s ease-in-out infinite; }
+  .voice.speaking { animation: speak 1.9s ease-in-out infinite; }
+  @keyframes swell { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes speak {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 70px rgba(244, 207, 140, 0.45), 0 0 160px rgba(244, 190, 120, 0.3); }
+    50% { transform: scale(1.09); box-shadow: 0 0 100px rgba(244, 207, 140, 0.7), 0 0 220px rgba(244, 190, 120, 0.45); }
+  }
+  .caption { min-height: 1.5em; margin: 0; color: var(--mute); }
+  #voice-message { margin-top: 1.25rem; }
+  .keep-hint {
+    margin-top: 2.5rem;
+    background: none;
+    border: 0;
+    padding: 0.5rem 0;
+    color: var(--mute);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+  }
+  .keep-hint.show { opacity: 1; }
+
+  /* Keep a card */
+  #keep { padding-top: calc(3.5rem + env(safe-area-inset-top, 0px)); padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
+  .keep-inner { width: 100%; max-width: 30rem; margin: 0 auto; }
+  .keep-inner h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.75rem;
+    line-height: 1.3;
+    margin: 0 0 0.5rem;
+  }
+  .keep-inner > p { margin: 0 0 1.5rem; color: var(--mute); max-width: 24rem; }
+  .picker {
+    display: grid;
+    grid-template-columns: repeat(4, 3.5rem);
+    gap: 1rem 1.25rem;
+    margin: 0 0 2.5rem;
+    padding: 0;
+    list-style: none;
+  }
+  .picker button {
+    width: 3.5rem; height: 3.5rem;
+    border-radius: 50%;
+    border: 1px solid var(--mute);
+    background: transparent;
+    font-family: var(--serif);
+    font-size: 1.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  }
+  .picker button:hover { border-color: var(--glow); }
+  .picker button[aria-pressed="true"] { background: var(--glow); border-color: var(--glow); color: var(--ink); }
+  .card-frame {
+    margin: 0 0 1.25rem;
+    border-radius: 4px;
+    box-shadow: 0 0 60px rgba(242, 223, 168, 0.25);
+    overflow: hidden;
+    animation: lit 0.6s ease-out;
+  }
+  @keyframes lit { from { opacity: 0; box-shadow: 0 0 0 rgba(242, 223, 168, 0); } to { opacity: 1; box-shadow: 0 0 60px rgba(242, 223, 168, 0.25); } }
+  .card-frame img { display: block; width: 100%; height: auto; -webkit-touch-callout: default; }
+  .save {
+    font-weight: 500;
+    padding: 0.85rem 1.75rem;
+    border-radius: 999px;
+    border: 0;
+    background: var(--glow);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .save-note { color: var(--mute); font-size: 0.9rem; margin: 1rem 0 0; max-width: 24rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .orb { animation: none; }
+    .title-en { animation: none; }
+    .continue { animation: none; opacity: 0.85; }
+    .screen { transition: none; }
+    .voice { animation: none !important; }
+    .card-frame { animation: none; }
+    .keep-hint { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="light" id="light" aria-hidden="true">
+  <span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span>
+</div>
+
+<!-- 1. Opening -->
+<section class="screen" id="opening" aria-labelledby="title">
+  <h1 class="title-en" id="title" tabindex="-1"><span>Drawing</span><span>Lots</span></h1>
+  <button class="continue" id="continue" type="button">Tap to continue</button>
+</section>
+
+<!-- 2. Voice guide -->
+<section class="screen" id="guide" hidden aria-labelledby="guide-title">
+  <div class="guide-inner">
+    <h2 class="guide-line" id="guide-title" tabindex="-1">Listen first. The guide will speak.</h2>
+    <p class="note">Tap the light to begin. Allow the microphone when your phone asks.</p>
+    <button class="voice idle" id="voice" type="button" aria-label="Begin the voice guide"><span id="voice-label">Begin</span></button>
+    <p class="caption" id="caption" aria-live="polite"></p>
+    <p class="note" id="voice-message" hidden></p>
+    <button class="keep-hint" id="keep-hint" type="button">Finished? Keep a card</button>
+  </div>
+</section>
+
+<!-- 3. Keep a card -->
+<section class="screen" id="keep" hidden aria-labelledby="keep-title">
+  <div class="keep-inner">
+    <h2 id="keep-title" tabindex="-1">Which stick did you draw?</h2>
+    <p>Tap its number to keep a card of it.</p>
+    <ul class="picker" id="picker"></ul>
+    <div id="result" hidden aria-live="polite">
+      <div class="card-frame"><img id="card-img" alt=""></div>
+      <button class="save" id="save" type="button">Save card</button>
+      <p class="save-note">The card holds only the words on your stick and today's date. On some phones you can also press and hold the card to save it.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  // ---------- Settings you may want to change ----------
+  const AGENT_ID = "agent_9701m31z0etqfgj9j6knvjys4jqm";
+  // Paste the agent's "Copy shareable link" between the quotes. It becomes a backup link if the voice cannot start here.
+  const SHARE_LINK = "";
+  // After the agent calls the finish_ritual tool, the card screen opens this long after (lets the closing question finish).
+  const REVEAL_DELAY_MS = 15000;
+  // If the call simply ends, the card screen opens after this long.
+  const DISCONNECT_DELAY_MS = 3000;
+  // "Finished? Keep a card" fades in after this long, as a manual way to the card screen.
+  const KEEP_HINT_DELAY_MS = 12000;
+  // Words on the cards. Keep in step with the printed sticks.
+  const STICKS = {
+    1: "The answer that came first is worth remembering.",
+    2: "Imagine saying this to a friend. Listen to how it sounds.",
+    3: "Waiting protects something. Notice what.",
+    4: "There may be more than one voice in this. Notice which is loudest.",
+    5: "Picture yourself a year from now, looking back on today.",
+    6: "Notice what you felt when you read this.",
+    7: "Beneath a big question, there is often a smaller one.",
+    8: "Some answers arrive before the question is finished."
+  };
+  const CLOSING = "Keep that answer.";
+  const LABEL = "A small ritual for hard decisions";
+  const SDK_URL = "https://cdn.jsdelivr.net/npm/@elevenlabs/client/+esm";
+
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const light = document.getElementById("light");
+  const voiceBtn = document.getElementById("voice");
+  const voiceLabel = document.getElementById("voice-label");
+  const caption = document.getElementById("caption");
+  const voiceMessage = document.getElementById("voice-message");
+  let session = null;
+  let starting = false;
+  let finished = false;
+  let sdkPromise = null;
+  let revealTimer = null;
+  let hintTimer = null;
+
+  // ---------- Screen switching ----------
+  function show(id) {
+    const current = document.querySelector(".screen:not([hidden])");
+    const next = document.getElementById(id);
+    if (current === next) return;
+    function enter() {
+      if (current) { current.hidden = true; current.classList.remove("out", "in"); }
+      next.hidden = false;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          next.classList.add("in");
+          const target = next.querySelector("[tabindex='-1']");
+          if (target) target.focus({ preventScroll: true });
+        });
+      });
+      window.scrollTo(0, 0);
+    }
+    if (current) {
+      current.classList.add("out");
+      setTimeout(enter, reduceMotion ? 0 : 600);
+    } else {
+      enter();
+    }
+  }
+  document.getElementById("opening").classList.add("in");
+
+  // ---------- Opening -> guide ----------
+  function loadSdk() {
+    if (!sdkPromise) {
+      sdkPromise = import(SDK_URL);
+      sdkPromise.catch(function () { /* handled when the guest taps the light */ });
+    }
+    return sdkPromise;
+  }
+  document.getElementById("opening").addEventListener("click", function () {
+    light.classList.add("calm");
+    show("guide");
+    loadSdk(); // start fetching the voice library while the guest reads
+    hintTimer = setTimeout(function () {
+      document.getElementById("keep-hint").classList.add("show");
+    }, KEEP_HINT_DELAY_MS);
+  });
+
+  // ---------- Voice guide ----------
+  function setOrb(state) {
+    voiceBtn.className = "voice " + state;
+    const labels = { idle: "Begin", connecting: "", listening: "", speaking: "" };
+    const captions = { idle: "", connecting: "Connecting", listening: "Listening", speaking: "The guide is speaking" };
+    voiceLabel.textContent = labels[state] || "";
+    caption.textContent = captions[state] || "";
+  }
+
+  function showMessage(text, withLink) {
+    voiceMessage.textContent = text + " ";
+    if (withLink && SHARE_LINK) {
+      const a = document.createElement("a");
+      a.href = SHARE_LINK;
+      a.textContent = "Open the guide here instead.";
+      voiceMessage.appendChild(a);
+    }
+    voiceMessage.hidden = false;
+  }
+
+  async function beginVoice() {
+    if (session || starting || finished) return;
+    starting = true;
+    voiceMessage.hidden = true;
+    setOrb("connecting");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(function (t) { t.stop(); });
+    } catch (e) {
+      starting = false;
+      setOrb("idle");
+      showMessage("The microphone is off for this page. Allow it in your browser settings, then tap the light again.", true);
+      return;
+    }
+    try {
+      const sdk = await loadSdk();
+      session = await sdk.Conversation.startSession({
+        agentId: AGENT_ID,
+        onConnect: function () { setOrb("listening"); },
+        onModeChange: function (m) { setOrb(m && m.mode === "speaking" ? "speaking" : "listening"); },
+        onDisconnect: function () { session = null; if (!finished) { setOrb("idle"); queueReveal(DISCONNECT_DELAY_MS); } },
+        onError: function () { /* the disconnect handler covers a dropped call */ },
+        clientTools: {
+          finish_ritual: function () {
+            queueReveal(REVEAL_DELAY_MS);
+            return "The keepsake screen will open shortly.";
+          }
+        }
+      });
+    } catch (e) {
+      session = null;
+      setOrb("idle");
+      showMessage("The voice guide could not start here. Reload the page and try again.", true);
+    }
+    starting = false;
+  }
+  voiceBtn.addEventListener("click", beginVoice);
+
+  // ---------- Guide -> keep ----------
+  function queueReveal(ms) {
+    if (revealTimer || finished) return;
+    revealTimer = setTimeout(openKeep, ms);
+  }
+  function openKeep() {
+    finished = true;
+    clearTimeout(revealTimer);
+    clearTimeout(hintTimer);
+    revealTimer = null;
+    if (session) {
+      try { session.endSession(); } catch (e) { /* already closed */ }
+      session = null;
+    }
+    show("keep");
+  }
+  document.getElementById("keep-hint").addEventListener("click", openKeep);
+
+  // ---------- Keep: picker and card ----------
+  const picker = document.getElementById("picker");
+  const result = document.getElementById("result");
+  const cardImg = document.getElementById("card-img");
+  const saveBtn = document.getElementById("save");
+  let currentCanvas = null;
+  let currentNumber = null;
+
+  Object.keys(STICKS).forEach(function (n) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = n;
+    b.setAttribute("aria-pressed", "false");
+    b.setAttribute("aria-label", "Stick " + n);
+    b.addEventListener("click", function () { pick(Number(n)); });
+    li.appendChild(b);
+    picker.appendChild(li);
+  });
+
+  async function fontsReady() {
+    try {
+      await Promise.all([
+        document.fonts.load("400 60px Newsreader"),
+        document.fonts.load("italic 400 40px Newsreader"),
+        document.fonts.load("400 30px 'Instrument Sans'")
+      ]);
+    } catch (e) { /* fall back to system fonts */ }
+  }
+
+  function wrapLines(ctx, text, maxWidth) {
+    const words = text.split(" ");
+    const lines = [];
+    let line = "";
+    words.forEach(function (w) {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; } else { line = test; }
+    });
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function drawCard(n) {
+    const W = 1080, H = 1440;
+    const canvas = document.createElement("canvas");
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    const SERIF = "Newsreader, Georgia, 'Times New Roman', serif";
+    const SANS = "'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+    ctx.fillStyle = "#fbf7ee";
+    ctx.fillRect(0, 0, W, H);
+    const g = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, H * 0.85);
+    g.addColorStop(0, "rgba(242, 223, 168, 0.6)");
+    g.addColorStop(1, "rgba(242, 223, 168, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(29, 34, 48, 0.25)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(60, 60, W - 120, H - 120);
+
+    ctx.fillStyle = "#1d2230";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "400 34px " + SANS;
+    ctx.fillText(LABEL, W / 2, 175);
+
+    const text = STICKS[n];
+    let size = 80;
+    let lines;
+    do {
+      ctx.font = "400 " + size + "px " + SERIF;
+      lines = wrapLines(ctx, text, 760);
+      size -= 4;
+    } while (lines.length > 5 && size > 52);
+    size += 4;
+    const lineHeight = Math.round(size * 1.32);
+    let y = H * 0.47 - (lineHeight * (lines.length - 1)) / 2;
+    lines.forEach(function (l) { ctx.fillText(l, W / 2, y); y += lineHeight; });
+
+    ctx.font = "italic 400 46px " + SERIF;
+    ctx.fillText(CLOSING, W / 2, H - 330);
+
+    ctx.strokeStyle = "rgba(29, 34, 48, 0.25)";
+    ctx.beginPath();
+    ctx.moveTo(120, H - 240);
+    ctx.lineTo(W - 120, H - 240);
+    ctx.stroke();
+
+    const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    ctx.font = "400 34px " + SANS;
+    ctx.textAlign = "left";
+    ctx.fillText("No. " + n, 120, H - 170);
+    ctx.textAlign = "right";
+    ctx.fillText(date, W - 120, H - 170);
+    return canvas;
+  }
+
+  async function pick(n) {
+    currentNumber = n;
+    Array.prototype.forEach.call(picker.querySelectorAll("button"), function (b) {
+      b.setAttribute("aria-pressed", String(Number(b.textContent) === n));
+    });
+    await fontsReady();
+    currentCanvas = drawCard(n);
+    cardImg.src = currentCanvas.toDataURL("image/png");
+    cardImg.alt = "Card for stick " + n + ": " + STICKS[n];
+    result.hidden = false;
+  }
+
+  saveBtn.addEventListener("click", async function () {
+    if (!currentCanvas) return;
+    const name = "stick-" + currentNumber + ".png";
+    try {
+      const blob = await new Promise(function (resolve) { currentCanvas.toBlob(resolve, "image/png"); });
+      const file = new File([blob], name, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My stick" });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+    }
+    try {
+      const a = document.createElement("a");
+      a.href = currentCanvas.toDataURL("image/png");
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (e) { /* the press-and-hold route still works */ }
+  });
+</script>
+</body>
+</html>
