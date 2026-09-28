@@ -196,7 +196,42 @@
     opacity: 0.85;
     min-height: 1.5em;
   }
-  .caption { min-height: 1.5em; margin: 0; color: var(--mute); }
+  .intro { display: flex; flex-direction: column; align-items: center; transition: opacity 0.6s ease; }
+  #guide.running .intro { opacity: 0; }
+  #guide.running .voice { height: 14rem; margin-top: 0; cursor: default; }
+  .line {
+    font-family: var(--serif);
+    font-size: clamp(1.1rem, 4.6vw, 1.35rem);
+    line-height: 1.45;
+    color: var(--text);
+    max-width: 22rem;
+    min-height: 4.4em;
+    margin: 0.5rem 0 0;
+    text-wrap: balance;
+    transition: opacity 0.35s ease;
+  }
+  .line.fade { opacity: 0; }
+  .choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.6rem; margin-top: 1rem; min-height: 3.1rem; }
+  .choice {
+    padding: 0.75rem 1.35rem;
+    border-radius: 999px;
+    border: 1px solid rgba(242, 223, 168, 0.55);
+    background: rgba(242, 223, 168, 0.08);
+    color: var(--glow);
+    font-size: 1rem;
+    cursor: pointer;
+    opacity: 0;
+    animation: fade-in 0.8s ease both;
+    transition: background-color 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .choice:nth-child(2) { animation-delay: 0.15s; }
+  .choice:nth-child(3) { animation-delay: 0.3s; }
+  .choice:hover { background: rgba(242, 223, 168, 0.18); }
+  .wait { width: 5rem; height: 1px; margin-top: 1.1rem; background: rgba(155, 166, 187, 0.25); opacity: 0; transition: opacity 0.6s; }
+  .wait span { display: block; height: 100%; width: 0; background: var(--glow); opacity: 0.7; }
+  .wait.run { opacity: 1; }
+  .wait.run span { width: 100%; transition: width var(--dur, 10s) linear; }
   #voice-message { margin-top: 1.25rem; }
   .keep-hint {
     margin-top: 2rem;
@@ -393,11 +428,14 @@
 <section class="screen" id="guide" hidden aria-labelledby="guide-title">
   <div class="guide-inner">
     <div class="ritual" id="ritual">
-    <h2 class="guide-line" id="guide-title" tabindex="-1">Listen first. The guide will speak.</h2>
-    <p class="note">Tap the flame to begin. Allow the microphone when your phone asks.</p>
-    <button class="voice idle" id="voice" type="button" aria-label="Begin the voice guide"><canvas class="flame" id="flame" aria-hidden="true"></canvas><span id="voice-label">begin</span></button>
-    <p class="caption" id="caption" aria-live="polite"></p>
-    <p class="note" id="voice-message" hidden></p>
+      <div class="intro" id="intro">
+        <h2 class="guide-line" id="guide-title" tabindex="-1">Sound on. The guide will speak.</h2>
+        <p class="note">Tap the flame to begin.</p>
+      </div>
+      <button class="voice idle" id="voice" type="button" aria-label="Begin"><canvas class="flame" id="flame" aria-hidden="true"></canvas><span id="voice-label">begin</span></button>
+      <p class="line" id="line" aria-live="polite"></p>
+      <div class="choices" id="choices"></div>
+      <div class="wait" id="wait" aria-hidden="true"><span></span></div>
     </div>
     <div class="poem" id="poem" hidden>
       <p class="poem-line">the moment the penny is up in the air,</p>
@@ -434,8 +472,9 @@
 <nav class="preview-bar" id="preview-bar" hidden aria-label="Preview screens">
   <button type="button" data-go="opening">Title</button>
   <button type="button" data-go="idle">Flame</button>
-  <button type="button" data-go="listening">Listening</button>
-  <button type="button" data-go="speaking">Speaking</button>
+  <button type="button" data-go="story">Story</button>
+  <button type="button" data-go="draw">Draw</button>
+  <button type="button" data-go="notice">Notice</button>
   <button type="button" data-go="finished">Ending</button>
   <button type="button" data-go="keep">Card</button>
   <button type="button" data-go="close" aria-label="Hide preview bar">&times;</button>
@@ -443,15 +482,35 @@
 
 <script>
   // ---------- Settings you may want to change ----------
-  const AGENT_ID = "agent_9701m31z0etqfgj9j6knvjys4jqm";
-  // Paste the agent's "Copy shareable link" between the quotes. It becomes a backup link if the voice cannot start here.
-  const SHARE_LINK = "";
-  // After the agent calls finish_ritual, the ending (flame goes out, poem surfaces) starts once the agent stops speaking.
-  // If the agent is still speaking after this long, the ending starts anyway.
-  const END_FALLBACK_MS = 12000;
-  // "Keep a card of your stick" appears this long after the voice guide connects, as a manual way to the card screen.
-  // It also appears straight away when the agent finishes the ritual.
-  const KEEP_HINT_DELAY_MS = 45000;
+  // Voice lines. Record each one as its own file (for example with iPhone Voice Memos),
+  // and put the files in a "voice" folder next to this page: voice/story.mp3, voice/help.mp3, and so on.
+  // If a file is missing, the words still appear on screen and the guide moves on by itself.
+  const VOICE_FOLDER = "voice/";
+  // File type of the recordings: "mp3", or "m4a" for iPhone Voice Memos.
+  const VOICE_EXT = "mp3";
+  const LINES = {
+    story: "Hello. I keep this box. In my family, when one of us couldn't make up our mind, we drew lots. By the time I drew a stick, I usually already knew my answer. The words never told me anything new. This box is just a small nudge, to help you hear what your heart already knows. Think of a decision you are holding on to. Keep it in your head.",
+    help: "Maybe something you keep going back and forth on. Or something you have been putting off. If nothing comes, pick something small, like what to do this weekend.",
+    lean: "Now ask yourself which way you are leaning. Just in your head. Keep that answer.",
+    draw: "Draw one stick from the box. Hold it up to the light, and read the words.",
+    notice: "When you read it, did you feel relief, or a small no? Either one is your answer.",
+    relief: "Then part of you already knew.",
+    no: "That small no is worth listening to.",
+    unsure: "That's alright. Sometimes it takes a moment to hear.",
+    close: "Thank you for sitting with the box. Keep that answer."
+  };
+  // The steps. After each line: the buttons shown, and how many seconds of silence before it moves on by itself.
+  const STEPS = {
+    story:  { line: "story",  choices: [["I have one", "lean"], ["Help me find one", "help"]], wait: 10, next: "lean" },
+    help:   { line: "help",   choices: [["I have one", "lean"]], wait: 12, next: "lean" },
+    lean:   { line: "lean",   choices: [["I know which way", "draw"]], wait: 6, next: "draw" },
+    draw:   { line: "draw",   choices: [["I see the words", "notice"]], wait: 25, next: "notice" },
+    notice: { line: "notice", choices: [["Relief", "relief"], ["A small no", "no"], ["Not sure", "unsure"]], wait: 12, next: "close" },
+    relief: { line: "relief", wait: 0.6, next: "close" },
+    no:     { line: "no",     wait: 0.6, next: "close" },
+    unsure: { line: "unsure", wait: 0.6, next: "close" },
+    close:  { line: "close",  end: true }
+  };
   // Words on the cards. Keep in step with the printed sticks.
   const STICKS = {
     1: "The moon clears the cloud. Go the way you are leaning.",
@@ -465,7 +524,6 @@
   };
   const CLOSING = "Keep that answer.";
   const LABEL = "A small ritual for hearing yourself";
-  const SDK_URL = "https://cdn.jsdelivr.net/npm/@elevenlabs/client/+esm";
   // Loudness of the ambient bed (warm drone + candle crackle), 0 to 1. Sound effects are separate.
   const AMBIENT_LEVEL = 0.4;
 
@@ -513,6 +571,7 @@
     function build() {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return false;
+      try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) { /* older browsers */ }
       ctx = new AC();
       master = ctx.createGain();
       master.gain.value = muted ? 0 : 1;
@@ -653,6 +712,30 @@
         bell(440, 0.035, 0.5, 9);
       },
       duck: function () { bedTo(0, 1.5); },
+      lower: function () { bedTo(AMBIENT_LEVEL * 0.35, 1.2); },
+      decode: function (data) {
+        if (!ready()) return Promise.reject(new Error("no audio"));
+        return new Promise(function (resolve, reject) { ctx.decodeAudioData(data, resolve, reject); });
+      },
+      voice: function (buffer) {
+        if (!ready()) return null;
+        const src = ctx.createBufferSource(), an = ctx.createAnalyser();
+        src.buffer = buffer; an.fftSize = 512;
+        src.connect(an); an.connect(master);
+        const data = new Uint8Array(an.fftSize);
+        const done = new Promise(function (resolve) { src.onended = resolve; });
+        src.start();
+        return {
+          done: done,
+          stop: function () { try { src.stop(); } catch (e) { /* already stopped */ } },
+          level: function () {
+            an.getByteTimeDomainData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
+            return Math.sqrt(sum / data.length);
+          }
+        };
+      },
       unduck: function () { bedTo(AMBIENT_LEVEL, 3); },
       swell: function () { bedTo(AMBIENT_LEVEL * 1.15, 7); },
       fadeOut: function () { bedTo(0, 10); },
@@ -695,25 +778,25 @@
     const nowMuted = !Sound.isMuted();
     Sound.setMuted(nowMuted);
     soundToggle.setAttribute("aria-pressed", String(!nowMuted));
-    if (!nowMuted && !session && !starting) Sound.unduck();
   });
 
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const light = document.getElementById("light");
   const voiceBtn = document.getElementById("voice");
   const voiceLabel = document.getElementById("voice-label");
-  const caption = document.getElementById("caption");
-  const voiceMessage = document.getElementById("voice-message");
-  let session = null;
-  let starting = false;
+  const lineEl = document.getElementById("line");
+  const choicesEl = document.getElementById("choices");
+  const waitEl = document.getElementById("wait");
+  const intro = document.getElementById("intro");
   let finished = false;
-  let sdkPromise = null;
   let revealTimer = null;
-  let hintTimer = null;
   let ending = false;
-  let pendingEnd = false;
-  let endFallback = null;
   let endSteps = [];
+  let flowStarted = false;
+  let flow = 0;
+  let stepTimers = [];
+  let playing = null;
+  const voiceBuffers = {};
 
   // ---------- Screen switching ----------
   function show(id) {
@@ -742,100 +825,106 @@
   document.getElementById("opening").classList.add("in");
 
   // ---------- Opening -> guide ----------
-  function loadSdk() {
-    if (!sdkPromise) {
-      sdkPromise = import(SDK_URL);
-      sdkPromise.catch(function () { /* handled when the guest taps the light */ });
-    }
-    return sdkPromise;
+  function loadVoice() {
+    Object.keys(LINES).forEach(function (id) {
+      if (voiceBuffers[id]) return;
+      voiceBuffers[id] = fetch(VOICE_FOLDER + id + "." + VOICE_EXT)
+        .then(function (r) { if (!r.ok) throw new Error("missing"); return r.arrayBuffer(); })
+        .then(function (b) { return Sound.decode(b); })
+        .catch(function () { return null; });
+    });
   }
   document.getElementById("opening").addEventListener("click", function () {
     Sound.start();
+    loadVoice();
     light.classList.add("calm");
     show("guide");
-    loadSdk(); // start fetching the voice library while the guest reads
   });
 
-  // ---------- Voice guide ----------
+  // ---------- Guide: a fixed path, spoken line by line ----------
   function showKeepHint() {
-    clearTimeout(hintTimer);
     document.getElementById("keep-hint").classList.add("show");
   }
   function setOrb(state) {
     voiceBtn.className = "voice " + state;
-    const labels = { idle: "begin", connecting: "", listening: "", speaking: "" };
-    const captions = { idle: "", connecting: "Connecting", listening: "Listening", speaking: "The guide is speaking" };
-    voiceLabel.textContent = labels[state] || "";
-    caption.textContent = captions[state] || "";
+    voiceLabel.textContent = state === "idle" ? "begin" : "";
   }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function later(fn, ms) { stepTimers.push(setTimeout(fn, ms)); }
 
-  function showMessage(text, withLink) {
-    voiceMessage.textContent = text + " ";
-    if (withLink && SHARE_LINK) {
-      const a = document.createElement("a");
-      a.href = SHARE_LINK;
-      a.textContent = "Open the guide here instead.";
-      voiceMessage.appendChild(a);
+  function clearStep() {
+    flow++;
+    stepTimers.forEach(clearTimeout); stepTimers = [];
+    if (playing) { playing.stop(); playing = null; }
+    choicesEl.innerHTML = "";
+    waitEl.classList.remove("run");
+  }
+  function setLine(text) {
+    lineEl.classList.add("fade");
+    later(function () { lineEl.textContent = text; lineEl.classList.remove("fade"); }, 350);
+  }
+  // Long lines are shown a sentence or two at a time, in step with the voice
+  function captionFlow(text, seconds) {
+    const sentences = (text.match(/[^.?!]+[.?!]+/g) || [text]).map(function (x) { return x.trim(); });
+    if (text.length <= 110 || sentences.length < 2) { setLine(text); return; }
+    const groups = [];
+    sentences.forEach(function (x) {
+      const last = groups[groups.length - 1];
+      if (last && (last + " " + x).length <= 90) groups[groups.length - 1] = last + " " + x;
+      else groups.push(x);
+    });
+    let at = 0;
+    groups.forEach(function (g) {
+      later(function () { setLine(g); }, at * 1000);
+      at += seconds * (g.length / text.length);
+    });
+  }
+  function voiceLevel() { return playing ? playing.level() : null; }
+
+  async function runStep(id) {
+    clearStep();
+    const token = flow, step = STEPS[id], text = LINES[step.line];
+    setOrb("speaking");
+    Sound.lower();
+    const pending = voiceBuffers[step.line];
+    const buf = pending ? await Promise.race([pending, wait(4000).then(function () { return null; })]) : null;
+    if (token !== flow) return;
+    let seconds;
+    if (buf) { playing = Sound.voice(buf); seconds = buf.duration; }
+    if (!playing) seconds = Math.max(2.5, text.split(/\s+/).length / 2.4);
+    captionFlow(text, seconds);
+    if (playing) await playing.done; else await wait(seconds * 1000);
+    if (token !== flow) return;
+    playing = null;
+    setOrb("listening");
+    if (step.end) { later(beginEnding, 1800); return; }
+    Sound.unduck();
+    (step.choices || []).forEach(function (c) {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "choice"; b.textContent = c[0];
+      b.addEventListener("click", function () { runStep(c[1]); });
+      choicesEl.appendChild(b);
+    });
+    if (step.choices) {
+      waitEl.style.setProperty("--dur", step.wait + "s");
+      waitEl.classList.remove("run");
+      void waitEl.offsetWidth;
+      waitEl.classList.add("run");
     }
-    voiceMessage.hidden = false;
+    later(function () { runStep(step.next); }, step.wait * 1000);
   }
 
-  async function beginVoice() {
-    if (session || starting || finished || ending) return;
-    starting = true;
-    voiceMessage.hidden = true;
-    setOrb("connecting");
+  function beginGuide() {
+    if (flowStarted || finished || ending) return;
+    flowStarted = true;
     Sound.ignite();
-    Sound.duck();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach(function (t) { t.stop(); });
-    } catch (e) {
-      starting = false;
-      setOrb("idle");
-      Sound.unduck();
-      showMessage("The microphone is off for this page. Allow it in your browser settings, then tap the flame again.", true);
-      return;
-    }
-    try {
-      const sdk = await loadSdk();
-      session = await sdk.Conversation.startSession({
-        agentId: AGENT_ID,
-        onConnect: function () {
-          if (ending) return;
-          setOrb("listening");
-          clearTimeout(hintTimer);
-          hintTimer = setTimeout(showKeepHint, KEEP_HINT_DELAY_MS);
-        },
-        onModeChange: function (m) {
-          if (ending) return;
-          const speaking = m && m.mode === "speaking";
-          setOrb(speaking ? "speaking" : "listening");
-          if (pendingEnd && !speaking) { clearTimeout(endFallback); endFallback = setTimeout(beginEnding, 1200); }
-        },
-        onDisconnect: function () {
-          session = null;
-          if (!finished && !ending) { setTimeout(beginEnding, 800); }
-        },
-        onError: function () { /* the disconnect handler covers a dropped call */ },
-        clientTools: {
-          finish_ritual: function () {
-            pendingEnd = true;
-            clearTimeout(endFallback);
-            endFallback = setTimeout(beginEnding, voiceBtn.classList.contains("speaking") ? END_FALLBACK_MS : 1500);
-            return "The ritual is closing. Say nothing more.";
-          }
-        }
-      });
-    } catch (e) {
-      session = null;
-      setOrb("idle");
-      Sound.unduck();
-      showMessage("The voice guide could not start here. Reload the page and try again.", true);
-    }
-    starting = false;
+    guideScreen.classList.add("running");
+    setOrb("listening");
+    setTimeout(function () { if (flowStarted) intro.hidden = true; }, reduceMotion ? 0 : 650);
+    const token = flow;
+    setTimeout(function () { if (token === flow && flowStarted && !ending) runStep("story"); }, 1600);
   }
-  voiceBtn.addEventListener("click", beginVoice);
+  voiceBtn.addEventListener("click", beginGuide);
 
   // ---------- Candle flame ----------
   (function () {
@@ -868,8 +957,8 @@
     function targetLevel(state, t) {
       if (state === "speaking") {
         let v = null;
-        try { if (session && typeof session.getOutputVolume === "function") v = session.getOutputVolume(); } catch (e) { v = null; }
-        if (typeof v === "number" && isFinite(v)) return Math.min(1, v * 2.2);
+        try { v = voiceLevel(); } catch (e) { v = null; }
+        if (typeof v === "number" && isFinite(v)) return Math.min(1, v * 4);
         return 0.35 + 0.6 * Math.abs(Math.sin(t * 5.2) * Math.sin(t * 1.9 + 1));
       }
       if (state === "listening") return 0.08;
@@ -925,14 +1014,8 @@
   function beginEnding() {
     if (ending || finished) return;
     ending = true;
-    pendingEnd = false;
-    clearTimeout(endFallback);
-    clearTimeout(hintTimer);
+    clearStep();
     keepHintBtn.classList.remove("show");
-    if (session) {
-      const s = session; session = null;
-      try { s.endSession(); } catch (e) { /* already closed */ }
-    }
     guideScreen.classList.add("ending");
     setOrb("out");
     Sound.blowOut();
@@ -948,14 +1031,9 @@
   function openKeep() {
     finished = true;
     endSteps.forEach(clearTimeout); endSteps = [];
-    clearTimeout(endFallback);
+    clearStep();
     clearTimeout(revealTimer);
-    clearTimeout(hintTimer);
     revealTimer = null;
-    if (session) {
-      try { session.endSession(); } catch (e) { /* already closed */ }
-      session = null;
-    }
     Sound.unduck();
     show("keep");
   }
@@ -1114,13 +1192,16 @@
     const keepHint = document.getElementById("keep-hint");
     function reset() {
       clearTimeout(revealTimer); revealTimer = null;
-      clearTimeout(hintTimer);
+      clearStep();
       finished = false;
+      flowStarted = false;
       keepHint.classList.remove("show");
-      voiceMessage.hidden = true;
-      ending = false; pendingEnd = false;
-      clearTimeout(endFallback);
+      ending = false;
       endSteps.forEach(clearTimeout); endSteps = [];
+      guideScreen.classList.remove("running");
+      intro.hidden = false;
+      lineEl.textContent = "";
+      setOrb("idle");
       guideScreen.classList.remove("ending");
       ritual.hidden = false;
       poem.hidden = true;
@@ -1133,9 +1214,13 @@
       light.classList.add("calm");
       if (where === "keep") { finished = true; Sound.unduck(); show("keep"); return; }
       show("guide");
-      if (where === "finished") { Sound.duck(); setOrb("listening"); endSteps.push(setTimeout(beginEnding, 1200)); return; }
-      if (where === "idle") Sound.unduck(); else Sound.duck();
-      setOrb(where);
+      loadVoice();
+      if (where === "idle") { Sound.unduck(); return; }
+      flowStarted = true;
+      guideScreen.classList.add("running");
+      intro.hidden = true;
+      if (where === "finished") { setOrb("listening"); endSteps.push(setTimeout(beginEnding, 1200)); return; }
+      runStep(where);
     }
     bar.addEventListener("click", function (e) {
       const b = e.target.closest("button[data-go]");
